@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	unsigned char img[SIZE];
 	//FILE *f;
 	//printf("codec_id: %d\npix_fmt: %d\n",AV_CODEC_ID_RAWVIDEO,AV_PIX_FMT_GRAY8);
-	ret = ff_init("test.bin", AV_CODEC_ID_RAWVIDEO,
+	ret = ff_init("test.wmv", AV_CODEC_ID_RAWVIDEO,
 					  W, H, 0, 30, AV_PIX_FMT_GRAY8);
 	if(ret < 0){
 		printf("ff_init failed, code: %d\n", ret);
@@ -23,14 +23,14 @@ int main(int argc, char **argv)
 			img[j] = (unsigned char)j;
 		ret = ff_wframe(img);
 		//fwrite(img, 1, SIZE, f);
-		if(ret < 0 && ret != -2){
+		if(ret < 0){
 			printf("ff_wframe failed, code: %d\n", ret);
 			exit(EXIT_FAILURE);
 		}
 	}
 	ret = ff_close();
 	//fclose(f);
-	if(ret < 0){
+	if(ret < 0 && ret != -2){
 		printf("ff_close failed, code: %d\n", ret);
 		exit(EXIT_FAILURE);
 	}
