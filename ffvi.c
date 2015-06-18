@@ -18,11 +18,11 @@
  * these variables should be initiated in ff_init(),
  * and freed in ff_close()
  */
-AVCodec *codec;
-AVCodecContext *context;
-FILE* f;
-AVFrame *frame;
-uint64_t frame_no;
+static AVCodec *codec;
+static AVCodecContext *context;
+static FILE* f;
+static AVFrame *frame;
+static uint64_t frame_no;
 
 int ff_init(const char *filename, 
 		    int codec_id, 
@@ -41,7 +41,7 @@ int ff_init(const char *filename,
 	context = avcodec_alloc_context3(codec);
 	if(context == NULL){
 		fprintf(stderr, "Context allocation failed\n");
-		return -2;
+		return -1;
 	}
 	context -> bit_rate  = bit_rate;
 	context -> width     = width;
@@ -50,22 +50,28 @@ int ff_init(const char *filename,
 	context -> pix_fmt   = pix_fmt;
 	if(avcodec_open2(context, codec, NULL) < 0){
 		fprintf(stderr, "Could not open codec\n");
-		return -3;
+		return -1;
 	}
 	f = fopen(filename, "wb");
 	if(f == NULL){
 		fprintf(stderr, "Could not open file %s\n", filename);
-		return -4;
+		return -1;
 	}
 	frame = av_frame_alloc();
 	if(frame == NULL){
 		fprintf(stderr, "Could not alloc video frame\n");
-		return -5;
+		return -1;
 	}
 	frame -> format = pix_fmt;
 	frame -> width  = width;
 	frame -> height = height;
 	frame_no = 0;
+	/*image_alloc not needed, use source data */
+	if(av_image_fill_linesizes(frame->linesize, pix_fmt, width) < 0){
+		fprintf(stderr,"Could not get line sizes\n");
+		return -1;
+	}
+	/*
 	int ret;
 	ret = av_image_alloc(frame -> data,
 			             frame -> linesize,
@@ -77,19 +83,27 @@ int ff_init(const char *filename,
 		fprintf(stderr, "Could not alloc raw image buffer\n");
 		return -6;
 	}
+	*/
 	return 0;
 }
 
 int ff_wframe(void *frame_raw)
 {
 	AVPacket pkt;
+	int ret, got_output;
 	av_init_packet(&pkt);
 	pkt.data = NULL;
 	pkt.size = 0;
-	memcpy(frame -> data[0], frame_raw, (context->width)*(context->height));
+	//memcpy(frame -> data[0], frame_raw, (context->width)*(context->height));
+	//frame->data[0] = frame_raw;
+	ret = av_image_fill_pointers(frame->data, context->pix_fmt, context->height,
+				              frame_raw, frame->linesize);
+	if(ret < 0){
+		fprintf(stderr, "Could not fill pointers\n");
+		return -1;
+	}
 	frame -> pts  = frame_no;
 	frame_no++;
-	int ret, got_output;
 	ret = avcodec_encode_video2(context, &pkt, frame, &got_output);
 	if(ret < 0){
 		fprintf(stderr, "Error encoding frame %lu\n", frame_no);
@@ -102,7 +116,7 @@ int ff_wframe(void *frame_raw)
 	ret = fwrite(pkt.data, 1, pkt.size, f);
 	if(ret < pkt.size){
 		fprintf(stderr,"pkt write faild\n");
-		return -3;
+		return -1;
 	}
 	av_free_packet(&pkt);
 	return 0;
@@ -122,24 +136,24 @@ int ff_close()
 			return -1;
 		}
 		if(got_output){
-			fwrite(pkt.data, 1, pkt.size, f);
+			ret = fwrite(pkt.data, 1, pkt.size, f);
 			if(ret < pkt.size){
 				fprintf(stderr,"pkt write faild\n");
-				return -2;
+				return -1;
 			}
 			av_free_packet(&pkt);
 		}
 	}
 	if(fclose(f) != 0){
 		fprintf(stderr, "Could not close file\n");
-		return -3;
+		return -1;
 	}
 	if(avcodec_close(context) < 0){
 		fprintf(stderr, "Could not close context\n");
-		return -4;
+		return -1;
 	}
 	av_free(context);
-	av_freep(frame->data);
+	//av_freep(frame->data);
 	av_frame_free(&frame);
 	return 0;
 }
