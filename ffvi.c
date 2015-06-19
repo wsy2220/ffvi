@@ -13,6 +13,7 @@
 #include <libavutil/samplefmt.h>
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
 
 /*
  * use global variables because it is hard to pass
@@ -22,11 +23,15 @@
  */
 static AVCodecContext *codec_contextp;
 //static FILE* f;
-static AVFrame *framep;
+static AVFrame *framep_out;
+static AVFrame *framep_in;
 static uint64_t frame_no;
 static AVFormatContext *fmt_contextp;
 static AVStream *streamp;
 static struct SwsContext *sws_contextp;
+/* some muxer(e.g. mp4) use different timebase. need to scale pkt->pts before write */
+static int time_scale;
+static int pix_fmt_out;
 
 int ff_init(const char *filename, 
 		    int codec_id, 
@@ -34,8 +39,9 @@ int ff_init(const char *filename,
 			int height, 
 			int bit_rate,
 			int fps,
-			int pix_fmt)
+			int pix_fmt_in)
 {
+	int ret;
 	AVCodec *codecp;
 	avcodec_register_all();
 	av_register_all();
@@ -50,40 +56,62 @@ int ff_init(const char *filename,
 		fprintf(stderr, "Context allocation failed\n");
 		return -1;
 	}
+	/* keep fmt only when raw video to be encoded */
+	if(codec_id == AV_CODEC_ID_RAWVIDEO)
+		pix_fmt_out = pix_fmt_in;
+	else
+		pix_fmt_out = AV_PIX_FMT_YUV420P;
+
 	codec_contextp -> bit_rate  = bit_rate;
 	codec_contextp -> width     = width;
 	codec_contextp -> height    = height;
 	codec_contextp -> time_base = (AVRational){1, fps};
-	codec_contextp -> pix_fmt   = pix_fmt;
+	codec_contextp -> pix_fmt   = pix_fmt_out;
+	codec_contextp -> flags    |= CODEC_FLAG_GLOBAL_HEADER;
 	if(avcodec_open2(codec_contextp, codecp, NULL) < 0){
 		fprintf(stderr, "Could not open codec\n");
 		return -1;
 	}
-	/*
-	f = fopen(filename, "wb");
-	if(f == NULL){
-		fprintf(stderr, "Could not open file %s\n", filename);
-		return -1;
-	}
-	*/
-	/* initialize frame */
-	framep = av_frame_alloc();
-	if(framep == NULL){
+	/*initialize input frame structure, only for conversion */
+	framep_in = av_frame_alloc();
+	if(framep_in == NULL){
 		fprintf(stderr, "Could not alloc video frame\n");
 		return -1;
 	}
-	framep -> format = pix_fmt;
-	framep-> width  = width;
-	framep-> height = height;
+	framep_in -> format = pix_fmt_in;
+	framep_in-> width  = width;
+	framep_in-> height = height;
+	ret = av_image_fill_linesizes(framep_in->linesize, pix_fmt_in, width);
+	if(ret < 0){
+		fprintf(stderr, "Could not calculate linesize\n");
+		return -1;
+	}
+
+	/* initialize output frame */
+	framep_out = av_frame_alloc();
+	if(framep_out == NULL){
+		fprintf(stderr, "Could not alloc video frame\n");
+		return -1;
+	}
+	framep_out -> format = pix_fmt_out;
+	framep_out-> width  = width;
+	framep_out-> height = height;
 	frame_no = 0;
-	/*image_alloc not needed, use source data */
-	if(av_image_fill_linesizes(framep->linesize, pix_fmt, width) < 0){
-		fprintf(stderr,"Could not get line sizes\n");
+	ret = av_image_alloc(framep_out->data, framep_out->linesize, width, height, pix_fmt_out, 1);
+	if(ret < 0){
+		fprintf(stderr, "Could not alloc image\n");
+		return -1;
+	}
+	/* initialize colorspace conversion context */
+	sws_contextp = sws_getContext(framep_out->width, framep_out->height, pix_fmt_in,
+			                      framep_out->width, framep_out->height, pix_fmt_out,
+								  0, NULL, NULL, NULL);
+	if(sws_contextp == NULL){
+		fprintf(stderr, "Could not start conversion context");
 		return -1;
 	}
 
 	/* initialize muxing context, fmt is guessed by filename */
-	int ret;
 	ret = avformat_alloc_output_context2(&fmt_contextp, NULL, NULL, filename);
 	if(ret < 0){
 		fprintf(stderr, "Could not find output format\n");
@@ -102,6 +130,8 @@ int ff_init(const char *filename,
 		fprintf(stderr, "Could not set stream codec\n");
 		return -1;
 	}
+	if(fmt_contextp->oformat->flags & AVFMT_GLOBALHEADER)
+		streamp->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
 	streamp->time_base = codec_contextp->time_base;
 
 	/* write header */
@@ -109,6 +139,7 @@ int ff_init(const char *filename,
 		fprintf(stderr, "Could not write file header\n");
 		return -1;
 	}
+	time_scale = streamp->time_base.den / codec_contextp->time_base.den;
 	return 0;
 }
 
@@ -119,15 +150,21 @@ int ff_wframe(void *frame_raw)
 	av_init_packet(&pkt);
 	pkt.data = NULL;
 	pkt.size = 0;
-	ret = av_image_fill_pointers(framep->data, codec_contextp->pix_fmt,
-		                         codec_contextp->height, frame_raw, framep->linesize);
+	ret = av_image_fill_pointers(framep_in->data, framep_in->format,
+			                     framep_in->height, frame_raw, framep_in->linesize);
 	if(ret < 0){
 		fprintf(stderr, "Could not fill pointers\n");
 		return -1;
 	}
-	framep -> pts  = frame_no;
+	ret = sws_scale(sws_contextp, framep_in->data, framep_in->linesize, 0,
+			        framep_in->height, framep_out->data, framep_out->linesize);
+	if(ret < 0){
+		fprintf(stderr, "Could not convert image\n");
+		return -1;
+	}
+	framep_out -> pts  = frame_no * time_scale;
 	frame_no++;
-	ret = avcodec_encode_video2(codec_contextp, &pkt, framep, &got_output);
+	ret = avcodec_encode_video2(codec_contextp, &pkt, framep_out, &got_output);
 	if(ret < 0){
 		fprintf(stderr, "Error encoding frame %lu\n", frame_no);
 		return -1;
@@ -144,13 +181,6 @@ int ff_wframe(void *frame_raw)
 		av_free_packet(&pkt);
 		return -2;
 	}
-	/*
-	ret = fwrite(pkt.data, 1, pkt.size, f);
-	if(ret < pkt.size){
-		fprintf(stderr,"pkt write faild\n");
-		return -1;
-	}
-	*/
 	av_free_packet(&pkt);
 	return 0;
 }
@@ -176,13 +206,6 @@ int ff_close()
 				fprintf(stderr,"pkt write faild\n");
 				return -1;
 			}
-			/*
-			ret = fwrite(pkt.data, 1, pkt.size, f);
-			if(ret < pkt.size){
-				fprintf(stderr,"pkt write faild\n");
-				return -1;
-			}
-			*/
 			av_free_packet(&pkt);
 		}
 	}
@@ -195,19 +218,13 @@ int ff_close()
 		return -1;
 	}
 
-	/*
-	if(fclose(f) != 0){
-		fprintf(stderr, "Could not close file\n");
-		return -1;
-	}
-	*/
 	if(avcodec_close(codec_contextp) < 0){
 		fprintf(stderr, "Could not close context\n");
 		return -1;
 	}
 	av_free(codec_contextp);
 	//av_freep(frame->data);
-	av_frame_free(&framep);
+	av_frame_free(&framep_out);
 
 	if(avio_close(fmt_contextp->pb) < 0){
 		fprintf(stderr,"Could not close file");
