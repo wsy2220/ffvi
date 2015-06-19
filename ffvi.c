@@ -26,6 +26,7 @@ static AVFrame *framep;
 static uint64_t frame_no;
 static AVFormatContext *fmt_contextp;
 static AVStream *streamp;
+static struct SwsContext *sws_contextp;
 
 int ff_init(const char *filename, 
 		    int codec_id, 
@@ -37,6 +38,7 @@ int ff_init(const char *filename,
 {
 	AVCodec *codecp;
 	avcodec_register_all();
+	av_register_all();
 	codecp = avcodec_find_encoder(codec_id);
 	if(codecp == NULL){
 		fprintf(stderr, "Codec not found\n");

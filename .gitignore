@@ -1,5 +1,5 @@
-.bin
-.o
-.avi
-.mp4
+*.bin
+*.o
+*.avi
+*.mp4
 a.out
