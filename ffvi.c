@@ -12,6 +12,7 @@
 #include <libavutil/mathematics.h>
 #include <libavutil/samplefmt.h>
 #include <libavutil/timestamp.h>
+#include <libavutil/opt.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 
@@ -68,6 +69,18 @@ int ff_init(const char *filename,
 	codec_contextp -> time_base = (AVRational){1, fps};
 	codec_contextp -> pix_fmt   = pix_fmt_out;
 	codec_contextp -> flags    |= CODEC_FLAG_GLOBAL_HEADER;
+	if(codec_id == AV_CODEC_ID_H264){
+		codec_contextp->profile = FF_PROFILE_H264_HIGH;
+	}
+	/*print all options for codec context */
+	/*
+	AVOption* avopt_p = av_opt_next(codec_contextp,NULL);
+	 while(avopt_p != NULL){
+		printf("%s:\t%s\n", avopt_p->name, avopt_p->help);
+		avopt_p = av_opt_next(codec_contextp, avopt_p);
+	}
+	exit(0);
+	*/
 	if(avcodec_open2(codec_contextp, codecp, NULL) < 0){
 		fprintf(stderr, "Could not open codec\n");
 		return -1;
@@ -156,7 +169,7 @@ int ff_wframe(void *frame_raw)
 		fprintf(stderr, "Could not fill pointers\n");
 		return -1;
 	}
-	ret = sws_scale(sws_contextp, framep_in->data, framep_in->linesize, 0,
+	ret = sws_scale(sws_contextp,(const uint8_t **)framep_in->data, framep_in->linesize, 0,
 			        framep_in->height, framep_out->data, framep_out->linesize);
 	if(ret < 0){
 		fprintf(stderr, "Could not convert image\n");
