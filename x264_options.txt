@@ -1,0 +1,162 @@
+preset:	5
+Set the encoding preset (cf. x264 --fullhelp)
+
+tune:	5
+Tune the encoding params (cf. x264 --fullhelp)
+
+profile:	5
+Set profile restrictions (cf. x264 --fullhelp) 
+
+fastfirstpass:	1
+Use fast settings when encoding first pass
+
+level:	5
+Specify level (as defined by Annex A)
+
+passlogfile:	5
+Filename for 2 pass stats
+
+wpredp:	5
+Weighted prediction for P-frames
+
+x264opts:	5
+x264 options
+
+crf:	4
+Select the quality for constant quality mode
+
+crf_max:	4
+In CRF mode, prevents VBV from lowering quality beyond this point.
+
+qp:	1
+Constant quantization parameter rate control method
+
+aq-mode:	1
+AQ method
+
+none:	128
+(null)
+
+variance:	128
+Variance AQ (complexity mask)
+
+autovariance:	128
+Auto-variance AQ
+
+autovariance-biased:	128
+Auto-variance AQ with bias to dark scenes
+
+aq-strength:	4
+AQ strength. Reduces blocking and blurring in flat and textured areas.
+
+psy:	1
+Use psychovisual optimizations.
+
+psy-rd:	5
+Strength of psychovisual optimization, in <psy-rd>:<psy-trellis> format.
+
+rc-lookahead:	1
+Number of frames to look ahead for frametype and ratecontrol
+
+weightb:	1
+Weighted prediction for B-frames.
+
+weightp:	1
+Weighted prediction analysis method.
+
+none:	128
+(null)
+
+simple:	128
+(null)
+
+smart:	128
+(null)
+
+ssim:	1
+Calculate and print SSIM stats.
+
+intra-refresh:	1
+Use Periodic Intra Refresh instead of IDR frames.
+
+bluray-compat:	1
+Bluray compatibility workarounds.
+
+b-bias:	1
+Influences how often B-frames are used
+
+b-pyramid:	1
+Keep some B-frames as references.
+
+none:	128
+(null)
+
+strict:	128
+Strictly hierarchical pyramid
+
+normal:	128
+Non-strict (not Blu-ray compatible)
+
+mixed-refs:	1
+One reference per partition, as opposed to one reference per macroblock
+
+8x8dct:	1
+High profile 8x8 transform.
+
+fast-pskip:	1
+(null)
+
+aud:	1
+Use access unit delimiters.
+
+mbtree:	1
+Use macroblock tree ratecontrol.
+
+deblock:	5
+Loop filter parameters, in <alpha:beta> form.
+
+cplxblur:	4
+Reduce fluctuations in QP (before curve compression)
+
+partitions:	5
+A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
+
+direct-pred:	1
+Direct MV prediction mode
+
+none:	128
+(null)
+
+spatial:	128
+(null)
+
+temporal:	128
+(null)
+
+auto:	128
+(null)
+
+slice-max-size:	1
+Limit the size of each slice in bytes
+
+stats:	5
+Filename for 2 pass stats
+
+nal-hrd:	1
+Signal HRD information (requires vbv-bufsize; cbr not allowed in .mp4)
+
+none:	128
+(null)
+
+vbr:	128
+(null)
+
+cbr:	128
+(null)
+
+avcintra-class:	1
+AVC-Intra class 50/100/200
+
+x264-params:	5
+Override the x264 configuration using a :-separated list of key=value parameters
+

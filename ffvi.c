@@ -16,6 +16,7 @@
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 
+#define FLOAT_STRING_BUF 20
 /*
  * use global variables because it is hard to pass
  * arguments to another function in labview.
@@ -34,13 +35,26 @@ static struct SwsContext *sws_contextp;
 static int time_scale;
 static int pix_fmt_out;
 
+//static void print_options(const void *obj);
+/*
+ * initialize encoding envrionment
+ * codec_id: enum AVCodecID
+ * bit_rate: suggested bitrate, ignored when using crf.
+ * pix_fmt_in: enum AVPixelFormat
+ * q: {qmin, qmax} quantizer settings, 1 <= q <= 69, lower will get better quality. ignored
+ *    when set to -1, must set to {-1,-1} to use crf.
+ * crf: constant quality mode, 0 < crf <= 51. lower will get better quality. negative value
+ * is ignored.
+ */
 int ff_init(const char *filename, 
 		    int codec_id, 
 			int width, 
 			int height, 
 			int bit_rate,
 			int fps,
-			int pix_fmt_in)
+			int pix_fmt_in,
+			int q[2],
+			float crf)
 {
 	int ret;
 	AVCodec *codecp;
@@ -69,18 +83,17 @@ int ff_init(const char *filename,
 	codec_contextp -> time_base = (AVRational){1, fps};
 	codec_contextp -> pix_fmt   = pix_fmt_out;
 	codec_contextp -> flags    |= CODEC_FLAG_GLOBAL_HEADER;
+	codec_contextp -> qmin      = q[0];
+	codec_contextp -> qmax      = q[1];
+	//print_options(codec_contextp->priv_data);
 	if(codec_id == AV_CODEC_ID_H264){
 		codec_contextp->profile = FF_PROFILE_H264_HIGH;
+		if(crf > 0){
+			char crfs[FLOAT_STRING_BUF];
+			snprintf(crfs, FLOAT_STRING_BUF, "%f", crf);
+			av_opt_set(codec_contextp->priv_data,"crf",crfs,0);
+		}
 	}
-	/*print all options for codec context */
-	/*
-	AVOption* avopt_p = av_opt_next(codec_contextp,NULL);
-	 while(avopt_p != NULL){
-		printf("%s:\t%s\n", avopt_p->name, avopt_p->help);
-		avopt_p = av_opt_next(codec_contextp, avopt_p);
-	}
-	exit(0);
-	*/
 	if(avcodec_open2(codec_contextp, codecp, NULL) < 0){
 		fprintf(stderr, "Could not open codec\n");
 		return -1;
@@ -175,6 +188,7 @@ int ff_wframe(void *frame_raw)
 		fprintf(stderr, "Could not convert image\n");
 		return -1;
 	}
+	framep_out -> quality = 1;
 	framep_out -> pts  = frame_no * time_scale;
 	frame_no++;
 	ret = avcodec_encode_video2(codec_contextp, &pkt, framep_out, &got_output);
@@ -247,3 +261,23 @@ int ff_close()
 	return 0;
 }
 
+/* print all private options for a given object */
+/*
+void print_options(const void *obj)
+{
+	char buf[1024];
+	AVOption* avopt_p = av_opt_next(obj,NULL);
+	 while(avopt_p != NULL){
+		printf("%s\ntype:%d\n%s\n", avopt_p->name, avopt_p->type, avopt_p->help);
+		if(avopt_p->type == AV_OPT_TYPE_INT)
+			printf("value:%ld\n\n", av_get_int(obj, avopt_p->name, &avopt_p));
+		else if(avopt_p->type == AV_OPT_TYPE_FLOAT ||
+				avopt_p->type == AV_OPT_TYPE_DOUBLE)
+			printf("value:%f\n\n", av_get_double(obj, avopt_p->name, &avopt_p));
+		else if(avopt_p->type == AV_OPT_TYPE_STRING){
+			printf("value:%s\n\n", av_get_string(obj, avopt_p->name, &avopt_p,buf,1024);
+		}
+		avopt_p = av_opt_next(obj, avopt_p);
+	}
+}
+*/
