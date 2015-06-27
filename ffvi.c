@@ -54,7 +54,8 @@ int ff_init(const char *filename,
 			int fps,
 			int pix_fmt_in,
 			int q[2],
-			float crf)
+			float crf,
+			char *preset)
 {
 	int ret;
 	AVCodec *codecp;
@@ -91,8 +92,10 @@ int ff_init(const char *filename,
 		if(crf > 0){
 			char crfs[FLOAT_STRING_BUF];
 			snprintf(crfs, FLOAT_STRING_BUF, "%f", crf);
-			av_opt_set(codec_contextp->priv_data,"crf",crfs,0);
+			av_opt_set(codec_contextp->priv_data, "crf", crfs, 0);
 		}
+		if(*preset != '\0')
+			av_opt_set(codec_contextp->priv_data, "preset", preset, 0);
 	}
 	if(avcodec_open2(codec_contextp, codecp, NULL) < 0){
 		fprintf(stderr, "Could not open codec\n");

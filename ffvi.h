@@ -14,6 +14,7 @@ int ff_init(const char *filename,
 			int fps,
 			int pix_fmt_in,
 			int q[2],
-			float crf);
+			float crf,
+			char *preset);
 int ff_wframe(void *frame_raw);
 int ff_close();
